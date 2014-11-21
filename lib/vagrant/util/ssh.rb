@@ -170,8 +170,29 @@ module Vagrant
         LOGGER.info("Executing SSH in subprocess: #{command_options.inspect}")
         process = ChildProcess.build("ssh", *command_options)
         process.io.inherit!
-        process.start
-        process.wait
+
+        if opts[:capture]
+          stdout_r, stdout_w = ::IO.pipe
+          stderr_r, stderr_w = ::IO.pipe
+
+          process.io.stdout = stdout_w
+          process.io.stderr = stderr_w
+
+          process.start
+
+          stdout_w.close
+          stderr_w.close
+
+          begin
+            opts[:capture].call(stdout_r, stderr_r)
+          ensure
+            process.wait
+          end
+        else
+          process.start
+          process.wait
+        end
+
         return process.exit_code
       end
     end
